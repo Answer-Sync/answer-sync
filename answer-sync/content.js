@@ -38,6 +38,11 @@
     // 2. MESSAGE HANDLING from popup & background
     // ============================================================
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.type === 'PING') {
+            sendResponse({ pong: true });
+            return false;
+        }
+
         if (request.type === 'GET_QUESTION_COUNT') {
             const questions = scanQuestions();
             sendResponse({ count: questions.length });
