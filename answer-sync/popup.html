@@ -3,55 +3,106 @@
 
 <head>
     <meta charset="utf-8">
-    <title>Answer Sync Settings</title>
+    <title>Answer Sync</title>
     <link rel="stylesheet" href="popup.css">
 </head>
 
 <body>
-    <div class="container">
-        <h2>Answer Sync ✨</h2>
+    <div class="popup-container">
+        <!-- Header -->
+        <div class="popup-header">
+            <div class="logo-row">
+                <img src="images/icon48.png" alt="Answer Sync" class="logo-icon">
+                <h1>Answer Sync</h1>
+            </div>
+        </div>
 
-        <!-- Logged out view -->
+        <!-- State: Not Logged In -->
         <div id="loggedOutView" class="view-section">
-            <p class="desc">Sign in to sync answers automatically and access your subscription.</p>
-            <div class="auth-buttons">
-                <button id="signInBtn" class="btn-primary">Sign In</button>
-                <button id="signUpBtn" class="btn-secondary">Sign Up</button>
-            </div>
+            <p class="tagline">AI-powered answers for any webpage, instantly.</p>
+            <button id="signInBtn" class="btn-google">
+                <svg class="google-icon" viewBox="0 0 24 24" width="18" height="18">
+                    <path fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
+                    <path fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                    <path fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                </svg>
+                Sign in with Google
+            </button>
+            <p class="secure-note">🔒 Secure Google OAuth</p>
         </div>
 
-        <!-- Logged in view -->
+        <!-- State: Logged In — Ready -->
         <div id="loggedInView" class="view-section hidden">
-            <p class="user-info">Logged in as: <span id="userEmail">...</span></p>
-
-            <!-- Subscription Status -->
-            <div class="subscription-card">
-                <div class="status-header">
-                    <span class="status-label">Subscription Status:</span>
-                    <span id="subStatusBadge" class="badge">Checking...</span>
-                </div>
-
-                <!-- Not Subscribed / Expired -->
-                <div id="upgradeSection" class="hidden">
-                    <p class="upgrade-text">Unlock unlimited answers for just <strong>$4.99/month</strong> or
-                        <strong>$49.99/year</strong>.</p>
-                    <button id="upgradeBtn" class="btn-primary subscribe-btn">Subscribe Now</button>
+            <!-- User Info Bar -->
+            <div class="user-bar">
+                <div class="user-info">
+                    <div class="user-avatar" id="userAvatar">
+                        <span id="userInitial">?</span>
+                    </div>
+                    <div class="user-details">
+                        <span class="user-email" id="userEmail">user@gmail.com</span>
+                        <span class="user-tier" id="userTier">
+                            <span class="tier-badge free" id="tierBadge">FREE</span>
+                            <span class="credit-count" id="creditCount">15/20 credits</span>
+                        </span>
+                    </div>
                 </div>
             </div>
 
-            <div class="setting checkbox-row mt-10">
-                <input type="checkbox" id="extensionEnabled">
-                <label for="extensionEnabled">Enable Extension</label>
+            <!-- Action Buttons -->
+            <div class="action-section">
+                <button id="reviewBtn" class="btn-action btn-review">
+                    <span class="btn-icon">📋</span>
+                    <div class="btn-text-group">
+                        <span class="btn-label">Review Answers</span>
+                        <span class="btn-desc">Scan → Review → Fill</span>
+                    </div>
+                </button>
+
+                <button id="autoFillBtn" class="btn-action btn-autofill">
+                    <span class="btn-icon">⚡</span>
+                    <div class="btn-text-group">
+                        <span class="btn-label">Auto-Fill All</span>
+                        <span class="btn-desc">Fill everything now</span>
+                    </div>
+                </button>
             </div>
 
-            <div class="action-buttons">
-                <button id="saveBtn" class="btn-secondary">Save Settings</button>
-                <button id="signOutBtn" class="btn-text">Sign Out</button>
+            <!-- Question Count -->
+            <div class="question-count" id="questionCountSection">
+                <span class="count-icon">🔍</span>
+                <span id="questionCount">Scanning page...</span>
+            </div>
+
+            <!-- Settings Footer -->
+            <div class="settings-footer">
+                <button id="dashboardBtn" class="btn-link">Dashboard ↗</button>
+                <button id="signOutBtn" class="btn-link btn-danger">Sign Out</button>
             </div>
         </div>
 
-        <div id="status" class="hidden">Saved!</div>
+        <!-- State: Processing -->
+        <div id="processingView" class="view-section hidden">
+            <div class="processing-content">
+                <div class="spinner"></div>
+                <p class="processing-text" id="processingText">Generating answers...</p>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <p class="progress-text" id="progressText">0/0</p>
+                <button id="cancelBtn" class="btn-cancel">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Status Messages -->
+        <div id="statusMessage" class="status-message hidden"></div>
     </div>
+
     <script src="popup.js"></script>
 </body>
 

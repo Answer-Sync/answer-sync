@@ -1,120 +1,285 @@
+/**
+ * Answer Sync — Popup Script
+ * Handles: auth state, mode selection, question count, progress tracking.
+ */
+
+const BACKEND_URL = 'https://answer-sync-web.vercel.app';
+
 document.addEventListener('DOMContentLoaded', () => {
     // Views
     const loggedOutView = document.getElementById('loggedOutView');
     const loggedInView = document.getElementById('loggedInView');
+    const processingView = document.getElementById('processingView');
 
-    // Auth Elements
+    // Auth elements
     const signInBtn = document.getElementById('signInBtn');
-    const signUpBtn = document.getElementById('signUpBtn');
     const signOutBtn = document.getElementById('signOutBtn');
-    const userEmailEl = document.getElementById('userEmail');
+    const userEmail = document.getElementById('userEmail');
+    const userInitial = document.getElementById('userInitial');
+    const tierBadge = document.getElementById('tierBadge');
+    const creditCount = document.getElementById('creditCount');
 
-    // Subscription Elements
-    const subStatusBadge = document.getElementById('subStatusBadge');
-    const upgradeSection = document.getElementById('upgradeSection');
-    const upgradeBtn = document.getElementById('upgradeBtn');
+    // Action elements
+    const reviewBtn = document.getElementById('reviewBtn');
+    const autoFillBtn = document.getElementById('autoFillBtn');
+    const dashboardBtn = document.getElementById('dashboardBtn');
+    const questionCount = document.getElementById('questionCount');
 
-    // Settings Elements
-    const enableCheckbox = document.getElementById('extensionEnabled');
-    const saveBtn = document.getElementById('saveBtn');
-    const statusEl = document.getElementById('status');
-    const backendUrl = 'https://answer-sync-web.vercel.app'; // Change to actual backend
+    // Processing elements
+    const processingText = document.getElementById('processingText');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const cancelBtn = document.getElementById('cancelBtn');
 
-    // Check auth state on load
+    // Status
+    const statusMessage = document.getElementById('statusMessage');
+
+    let currentAbortController = null;
+
+    // ---- Initialize ----
     checkAuthState();
 
-    function updateUI(user, subscription) {
-        if (user) {
-            loggedOutView.classList.add('hidden');
-            loggedInView.classList.remove('hidden');
-            userEmailEl.textContent = user.email;
-
-            // Update Subscription Status
-            if (subscription && subscription.active) {
-                subStatusBadge.textContent = 'Active PRO';
-                subStatusBadge.className = 'badge active';
-                upgradeSection.classList.add('hidden');
-            } else {
-                subStatusBadge.textContent = 'Free Basic';
-                subStatusBadge.className = 'badge inactive';
-                upgradeSection.classList.remove('hidden');
+    // ---- Auth State ----
+    function checkAuthState() {
+        chrome.storage.local.get(
+            ['authToken', 'userEmail', 'userTier', 'dailyCreditsUsed', 'dailyCreditLimit'],
+            (result) => {
+                if (result.authToken && result.userEmail) {
+                    showLoggedInView(result);
+                    fetchQuestionCount();
+                    // Fetch latest user info from backend
+                    refreshUserInfo(result.authToken);
+                } else {
+                    showLoggedOutView();
+                }
             }
+        );
+    }
+
+    function showLoggedOutView() {
+        loggedOutView.classList.remove('hidden');
+        loggedInView.classList.add('hidden');
+        processingView.classList.add('hidden');
+    }
+
+    function showLoggedInView(data) {
+        loggedOutView.classList.add('hidden');
+        loggedInView.classList.remove('hidden');
+        processingView.classList.add('hidden');
+
+        userEmail.textContent = data.userEmail || 'user@gmail.com';
+        userInitial.textContent = (data.userEmail || '?')[0].toUpperCase();
+
+        const tier = data.userTier || 'free';
+        tierBadge.textContent = tier === 'pro' ? 'PRO' : 'FREE';
+        tierBadge.className = `tier-badge ${tier}`;
+
+        if (tier === 'free') {
+            const used = data.dailyCreditsUsed || 0;
+            const limit = data.dailyCreditLimit || 20;
+            creditCount.textContent = `${limit - used}/${limit} credits`;
+            creditCount.classList.remove('hidden');
         } else {
-            loggedInView.classList.add('hidden');
-            loggedOutView.classList.remove('hidden');
+            creditCount.textContent = 'Unlimited';
+            creditCount.classList.remove('hidden');
         }
     }
 
-    function checkAuthState() {
-        chrome.storage.local.get(['authToken', 'userEmail', 'subscriptionActive', 'extensionEnabled'], (result) => {
-            // Settings
-            enableCheckbox.checked = result.extensionEnabled !== false;
+    function showProcessingView(text) {
+        loggedOutView.classList.add('hidden');
+        loggedInView.classList.add('hidden');
+        processingView.classList.remove('hidden');
 
-            if (result.authToken) {
-                // Mock user data from local storage for now
-                const user = { email: result.userEmail || 'user@example.com' };
-                const sub = { active: result.subscriptionActive || false };
-                updateUI(user, sub);
-
-                // Ideally, here you would call your backend to verify the token and get the latest sub status:
-                // fetch(`${backendUrl}/me`, { headers: { 'Authorization': `Bearer ${result.authToken}` }})
-                //    .then(res => res.json())
-                //    .then(data => {
-                //       chrome.storage.local.set({ subscriptionActive: data.isPro });
-                //       updateUI(data.user, { active: data.isPro });
-                //    });
-            } else {
-                updateUI(null, null);
-            }
-        });
+        processingText.textContent = text || 'Generating answers...';
+        progressBar.style.width = '0%';
+        progressText.textContent = '';
     }
 
-    // --- Event Listeners ---
+    function updateProgress(current, total) {
+        const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+        progressBar.style.width = `${pct}%`;
+        progressText.textContent = `${current}/${total}`;
+    }
 
-    signInBtn.addEventListener('click', () => {
-        // Open the Sign In page of your web app
-        chrome.tabs.create({ url: `${backendUrl}/login?source=extension` });
-    });
+    async function refreshUserInfo(token) {
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/user`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                chrome.storage.local.set({
+                    userTier: data.tier,
+                    dailyCreditsUsed: data.dailyCreditsUsed,
+                    dailyCreditLimit: data.dailyCreditLimit,
+                    hasApiKey: data.hasApiKey
+                });
+                showLoggedInView({
+                    userEmail: data.email,
+                    userTier: data.tier,
+                    dailyCreditsUsed: data.dailyCreditsUsed,
+                    dailyCreditLimit: data.dailyCreditLimit
+                });
+            }
+        } catch (e) {
+            // Silently fail — cached data is fine
+            console.log('Answer Sync: Could not reach backend for user refresh.');
+        }
+    }
 
-    signUpBtn.addEventListener('click', () => {
-        // Open the Sign Up page of your web app
-        chrome.tabs.create({ url: `${backendUrl}/signup?source=extension` });
-    });
-
-    upgradeBtn.addEventListener('click', () => {
-        // Open Stripe checkout or Pricing page
-        chrome.storage.local.get(['authToken'], (result) => {
-            const tokenQuery = result.authToken ? `?token=${result.authToken}` : '';
-            chrome.tabs.create({ url: `${backendUrl}/pricing${tokenQuery}` });
-        });
-    });
-
-    signOutBtn.addEventListener('click', () => {
-        chrome.storage.local.remove(['authToken', 'userEmail', 'subscriptionActive'], () => {
-            checkAuthState();
-        });
-    });
-
-    saveBtn.addEventListener('click', () => {
-        const isEnabled = enableCheckbox.checked;
-
-        chrome.storage.local.set({
-            extensionEnabled: isEnabled
-        }, () => {
-            statusEl.classList.remove('hidden');
-            setTimeout(() => {
-                statusEl.classList.add('hidden');
-            }, 2000);
-
-            // Notify content script
-            chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-                if (tabs && tabs[0]) {
-                    chrome.tabs.sendMessage(tabs[0].id, {
-                        type: 'SETTINGS_UPDATED',
-                        extensionEnabled: isEnabled
-                    }).catch(() => { });
+    // ---- Fetch Question Count from Content Script ----
+    function fetchQuestionCount() {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (!tabs || !tabs[0]) {
+                questionCount.textContent = 'No active tab';
+                return;
+            }
+            chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_QUESTION_COUNT' }, (response) => {
+                if (chrome.runtime.lastError) {
+                    questionCount.textContent = 'Open a page with questions';
+                    return;
+                }
+                if (response && typeof response.count === 'number') {
+                    questionCount.textContent = response.count > 0
+                        ? `${response.count} question${response.count !== 1 ? 's' : ''} found`
+                        : 'No questions detected on this page';
+                } else {
+                    questionCount.textContent = 'Scanning...';
                 }
             });
         });
+    }
+
+    // ---- Show Status Message ----
+    function showStatus(message, type = 'info') {
+        statusMessage.textContent = message;
+        statusMessage.className = `status-message ${type}`;
+        statusMessage.classList.remove('hidden');
+        setTimeout(() => {
+            statusMessage.classList.add('hidden');
+        }, 4000);
+    }
+
+    // ---- Event Listeners ----
+
+    // Sign In
+    signInBtn.addEventListener('click', () => {
+        chrome.tabs.create({ url: `${BACKEND_URL}/login?source=extension` });
+    });
+
+    // Sign Out
+    signOutBtn.addEventListener('click', () => {
+        chrome.storage.local.remove(
+            ['authToken', 'userEmail', 'userTier', 'dailyCreditsUsed', 'dailyCreditLimit', 'hasApiKey'],
+            () => {
+                showLoggedOutView();
+                showStatus('Signed out successfully', 'info');
+            }
+        );
+    });
+
+    // Dashboard
+    dashboardBtn.addEventListener('click', () => {
+        chrome.storage.local.get(['authToken'], (result) => {
+            const tokenQuery = result.authToken ? `?token=${result.authToken}` : '';
+            chrome.tabs.create({ url: `${BACKEND_URL}/dashboard${tokenQuery}` });
+        });
+    });
+
+    // Review Mode
+    reviewBtn.addEventListener('click', () => {
+        chrome.storage.local.get(['authToken'], (result) => {
+            if (!result.authToken) {
+                showStatus('Please sign in first', 'error');
+                return;
+            }
+
+            showProcessingView('Scanning & generating answers...');
+
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (!tabs || !tabs[0]) {
+                    showStatus('No active tab found', 'error');
+                    checkAuthState();
+                    return;
+                }
+
+                chrome.tabs.sendMessage(tabs[0].id, {
+                    type: 'SCAN_AND_REVIEW',
+                    authToken: result.authToken
+                }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        showStatus('Could not connect to page. Try refreshing.', 'error');
+                        checkAuthState();
+                        return;
+                    }
+                    if (response && response.error) {
+                        showStatus(response.error, 'error');
+                        checkAuthState();
+                    } else {
+                        // Sidebar is open in the page — close popup
+                        window.close();
+                    }
+                });
+            });
+        });
+    });
+
+    // Auto-Fill Mode
+    autoFillBtn.addEventListener('click', () => {
+        chrome.storage.local.get(['authToken'], (result) => {
+            if (!result.authToken) {
+                showStatus('Please sign in first', 'error');
+                return;
+            }
+
+            showProcessingView('Auto-filling all answers...');
+
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (!tabs || !tabs[0]) {
+                    showStatus('No active tab found', 'error');
+                    checkAuthState();
+                    return;
+                }
+
+                chrome.tabs.sendMessage(tabs[0].id, {
+                    type: 'SCAN_AND_AUTOFILL',
+                    authToken: result.authToken
+                }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        showStatus('Could not connect to page. Try refreshing.', 'error');
+                        checkAuthState();
+                        return;
+                    }
+                    if (response && response.error) {
+                        showStatus(response.error, 'error');
+                        checkAuthState();
+                    } else if (response && response.filled !== undefined) {
+                        showStatus(`✅ Filled ${response.filled} answer(s)!`, 'success');
+                        setTimeout(() => checkAuthState(), 2000);
+                    } else {
+                        window.close();
+                    }
+                });
+            });
+        });
+    });
+
+    // Cancel processing
+    cancelBtn.addEventListener('click', () => {
+        if (currentAbortController) {
+            currentAbortController.abort();
+            currentAbortController = null;
+        }
+        checkAuthState();
+    });
+
+    // Listen for progress updates from background
+    chrome.runtime.onMessage.addListener((request) => {
+        if (request.type === 'PROGRESS_UPDATE') {
+            updateProgress(request.current, request.total);
+        }
+        if (request.type === 'AUTH_STATE_CHANGED') {
+            checkAuthState();
+        }
     });
 });
