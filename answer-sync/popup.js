@@ -1,7 +1,6 @@
 /**
  * Answer Sync — Popup Script
  * Handles: auth state, mode selection, question count, progress tracking.
- * Uses chrome.scripting API to inject content script on demand (activeTab).
  */
 
 const BACKEND_URL = 'https://answer-sync-web.vercel.app';
@@ -40,31 +39,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---- Initialize ----
     checkAuthState();
 
-    // ---- Inject content script into active tab ----
-    async function injectContentScript(tabId) {
-        try {
-            // Check if already injected by sending a ping
-            const response = await chrome.tabs.sendMessage(tabId, { type: 'PING' }).catch(() => null);
-            if (response && response.pong) return true; // Already injected
-
-            // Inject CSS first, then JS
-            await chrome.scripting.insertCSS({
-                target: { tabId },
-                files: ['content.css']
-            });
-            await chrome.scripting.executeScript({
-                target: { tabId },
-                files: ['content.js']
-            });
-            // Small delay for script to initialize
-            await new Promise(r => setTimeout(r, 100));
-            return true;
-        } catch (e) {
-            console.error('Answer Sync: Failed to inject content script:', e);
-            return false;
-        }
-    }
-
     // ---- Auth State ----
     function checkAuthState() {
         chrome.storage.local.get(
@@ -72,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
             (result) => {
                 if (result.authToken && result.userEmail) {
                     showLoggedInView(result);
-                    scanActiveTab();
+                    fetchQuestionCount();
                     refreshUserInfo(result.authToken);
                 } else {
                     showLoggedOutView();
@@ -151,40 +125,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ---- Scan active tab for question count ----
-    async function scanActiveTab() {
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tabs || !tabs[0]) {
-            questionCount.textContent = 'No active tab';
-            return;
-        }
-
-        const tab = tabs[0];
-
-        // Don't try to inject into chrome:// or extension pages
-        if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
-            questionCount.textContent = 'Cannot scan this page';
-            return;
-        }
-
-        const injected = await injectContentScript(tab.id);
-        if (!injected) {
-            questionCount.textContent = 'Open a page with questions';
-            return;
-        }
-
-        chrome.tabs.sendMessage(tab.id, { type: 'GET_QUESTION_COUNT' }, (response) => {
-            if (chrome.runtime.lastError) {
-                questionCount.textContent = 'Open a page with questions';
+    // ---- Fetch Question Count from Content Script ----
+    function fetchQuestionCount() {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (!tabs || !tabs[0]) {
+                questionCount.textContent = 'No active tab';
                 return;
             }
-            if (response && typeof response.count === 'number') {
-                questionCount.textContent = response.count > 0
-                    ? `${response.count} question${response.count !== 1 ? 's' : ''} found`
-                    : 'No questions detected on this page';
-            } else {
-                questionCount.textContent = 'Scanning...';
-            }
+            chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_QUESTION_COUNT' }, (response) => {
+                if (chrome.runtime.lastError) {
+                    questionCount.textContent = 'Open a page with questions';
+                    return;
+                }
+                if (response && typeof response.count === 'number') {
+                    questionCount.textContent = response.count > 0
+                        ? `${response.count} question${response.count !== 1 ? 's' : ''} found`
+                        : 'No questions detected on this page';
+                } else {
+                    questionCount.textContent = 'Scanning...';
+                }
+            });
         });
     }
 
@@ -225,87 +185,79 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Review Mode
-    reviewBtn.addEventListener('click', async () => {
-        const result = await chrome.storage.local.get(['authToken']);
-        if (!result.authToken) {
-            showStatus('Please sign in first', 'error');
-            return;
-        }
-
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tabs || !tabs[0]) {
-            showStatus('No active tab found', 'error');
-            return;
-        }
-
-        showProcessingView('Scanning & generating answers...');
-
-        const injected = await injectContentScript(tabs[0].id);
-        if (!injected) {
-            showStatus('Could not access this page. Try a different page.', 'error');
-            checkAuthState();
-            return;
-        }
-
-        chrome.tabs.sendMessage(tabs[0].id, {
-            type: 'SCAN_AND_REVIEW',
-            authToken: result.authToken
-        }, (response) => {
-            if (chrome.runtime.lastError) {
-                showStatus('Could not connect to page. Try refreshing.', 'error');
-                checkAuthState();
+    reviewBtn.addEventListener('click', () => {
+        chrome.storage.local.get(['authToken'], (result) => {
+            if (!result.authToken) {
+                showStatus('Please sign in first', 'error');
                 return;
             }
-            if (response && response.error) {
-                showStatus(response.error, 'error');
-                checkAuthState();
-            } else {
-                window.close();
-            }
+
+            showProcessingView('Scanning & generating answers...');
+
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (!tabs || !tabs[0]) {
+                    showStatus('No active tab found', 'error');
+                    checkAuthState();
+                    return;
+                }
+
+                chrome.tabs.sendMessage(tabs[0].id, {
+                    type: 'SCAN_AND_REVIEW',
+                    authToken: result.authToken
+                }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        showStatus('Could not connect to page. Try refreshing.', 'error');
+                        checkAuthState();
+                        return;
+                    }
+                    if (response && response.error) {
+                        showStatus(response.error, 'error');
+                        checkAuthState();
+                    } else {
+                        window.close();
+                    }
+                });
+            });
         });
     });
 
     // Auto-Fill Mode
-    autoFillBtn.addEventListener('click', async () => {
-        const result = await chrome.storage.local.get(['authToken']);
-        if (!result.authToken) {
-            showStatus('Please sign in first', 'error');
-            return;
-        }
-
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tabs || !tabs[0]) {
-            showStatus('No active tab found', 'error');
-            return;
-        }
-
-        showProcessingView('Auto-filling all answers...');
-
-        const injected = await injectContentScript(tabs[0].id);
-        if (!injected) {
-            showStatus('Could not access this page. Try a different page.', 'error');
-            checkAuthState();
-            return;
-        }
-
-        chrome.tabs.sendMessage(tabs[0].id, {
-            type: 'SCAN_AND_AUTOFILL',
-            authToken: result.authToken
-        }, (response) => {
-            if (chrome.runtime.lastError) {
-                showStatus('Could not connect to page. Try refreshing.', 'error');
-                checkAuthState();
+    autoFillBtn.addEventListener('click', () => {
+        chrome.storage.local.get(['authToken'], (result) => {
+            if (!result.authToken) {
+                showStatus('Please sign in first', 'error');
                 return;
             }
-            if (response && response.error) {
-                showStatus(response.error, 'error');
-                checkAuthState();
-            } else if (response && response.filled !== undefined) {
-                showStatus(`✅ Filled ${response.filled} answer(s)!`, 'success');
-                setTimeout(() => checkAuthState(), 2000);
-            } else {
-                window.close();
-            }
+
+            showProcessingView('Auto-filling all answers...');
+
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (!tabs || !tabs[0]) {
+                    showStatus('No active tab found', 'error');
+                    checkAuthState();
+                    return;
+                }
+
+                chrome.tabs.sendMessage(tabs[0].id, {
+                    type: 'SCAN_AND_AUTOFILL',
+                    authToken: result.authToken
+                }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        showStatus('Could not connect to page. Try refreshing.', 'error');
+                        checkAuthState();
+                        return;
+                    }
+                    if (response && response.error) {
+                        showStatus(response.error, 'error');
+                        checkAuthState();
+                    } else if (response && response.filled !== undefined) {
+                        showStatus(`✅ Filled ${response.filled} answer(s)!`, 'success');
+                        setTimeout(() => checkAuthState(), 2000);
+                    } else {
+                        window.close();
+                    }
+                });
+            });
         });
     });
 

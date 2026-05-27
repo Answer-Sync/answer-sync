@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Answer Sync Test Page - Quiz</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f5f5f5; padding: 40px 20px; }
+        .quiz-container { max-width: 700px; margin: 0 auto; }
+        h1 { text-align: center; margin-bottom: 30px; color: #333; }
+        .question-card {
+            background: white; border-radius: 12px; padding: 24px;
+            margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border-left: 4px solid #6c5ce7;
+        }
+        .question-card h3 { margin-bottom: 16px; color: #222; font-size: 16px; }
+        .question-card label { display: block; padding: 10px 14px; margin: 6px 0; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+        .question-card label:hover { background: #f0f0f0; }
+        input[type="radio"], input[type="checkbox"] { margin-right: 10px; }
+        input[type="text"], textarea, select {
+            width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px;
+            font-size: 14px; transition: 0.2s;
+        }
+        input[type="text"]:focus, textarea:focus, select:focus { border-color: #6c5ce7; outline: none; }
+        textarea { min-height: 80px; resize: vertical; }
+        select { background: white; }
+        .submit-btn {
+            display: block; width: 100%; padding: 16px; background: #6c5ce7; color: white;
+            border: none; border-radius: 12px; font-size: 16px; font-weight: 600;
+            cursor: pointer; transition: 0.2s; margin-top: 20px;
+        }
+        .submit-btn:hover { background: #5a4bd1; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; margin-left: 8px; }
+        .badge-radio { background: #dfe6fd; color: #4c51bf; }
+        .badge-text { background: #d5f5e3; color: #27ae60; }
+        .badge-select { background: #fdebd0; color: #e67e22; }
+        .badge-checkbox { background: #fadbd8; color: #e74c3c; }
+        .badge-textarea { background: #d4efdf; color: #1abc9c; }
+    </style>
+</head>
+<body>
+    <div class="quiz-container">
+        <h1>🧪 Answer Sync Test Quiz</h1>
+        <p style="text-align:center; color:#666; margin-bottom:30px;">Use this page to test your Answer Sync extension. Click the extension icon and try Review or Auto-Fill!</p>
+
+        <form id="testQuiz">
+            <!-- Q1: Radio -->
+            <div class="question-card">
+                <h3>1. What is the capital of France? <span class="badge badge-radio">Radio</span></h3>
+                <label><input type="radio" name="q1" value="London"> London</label>
+                <label><input type="radio" name="q1" value="Paris"> Paris</label>
+                <label><input type="radio" name="q1" value="Berlin"> Berlin</label>
+                <label><input type="radio" name="q1" value="Madrid"> Madrid</label>
+            </div>
+
+            <!-- Q2: Radio -->
+            <div class="question-card">
+                <h3>2. Which planet is known as the Red Planet? <span class="badge badge-radio">Radio</span></h3>
+                <label><input type="radio" name="q2" value="Venus"> Venus</label>
+                <label><input type="radio" name="q2" value="Mars"> Mars</label>
+                <label><input type="radio" name="q2" value="Jupiter"> Jupiter</label>
+                <label><input type="radio" name="q2" value="Saturn"> Saturn</label>
+            </div>
+
+            <!-- Q3: Text Input -->
+            <div class="question-card">
+                <h3>3. What is the chemical symbol for water? <span class="badge badge-text">Text</span></h3>
+                <input type="text" name="q3" placeholder="Type your answer here...">
+            </div>
+
+            <!-- Q4: Select/Dropdown -->
+            <div class="question-card">
+                <h3>4. Which programming language was created by Guido van Rossum? <span class="badge badge-select">Dropdown</span></h3>
+                <select name="q4">
+                    <option value="">Select an answer...</option>
+                    <option value="Java">Java</option>
+                    <option value="Python">Python</option>
+                    <option value="C++">C++</option>
+                    <option value="Ruby">Ruby</option>
+                </select>
+            </div>
+
+            <!-- Q5: Radio -->
+            <div class="question-card">
+                <h3>5. What year did World War II end? <span class="badge badge-radio">Radio</span></h3>
+                <label><input type="radio" name="q5" value="1943"> 1943</label>
+                <label><input type="radio" name="q5" value="1945"> 1945</label>
+                <label><input type="radio" name="q5" value="1947"> 1947</label>
+                <label><input type="radio" name="q5" value="1950"> 1950</label>
+            </div>
+
+            <!-- Q6: Textarea -->
+            <div class="question-card">
+                <h3>6. Explain the process of photosynthesis in 2-3 sentences. <span class="badge badge-textarea">Textarea</span></h3>
+                <textarea name="q6" placeholder="Write your answer here..."></textarea>
+            </div>
+
+            <!-- Q7: Checkbox -->
+            <div class="question-card">
+                <h3>7. Which of the following are prime numbers? (Select all that apply) <span class="badge badge-checkbox">Checkbox</span></h3>
+                <label><input type="checkbox" name="q7" value="2"> 2</label>
+                <label><input type="checkbox" name="q7" value="4"> 4</label>
+                <label><input type="checkbox" name="q7" value="7"> 7</label>
+                <label><input type="checkbox" name="q7" value="9"> 9</label>
+                <label><input type="checkbox" name="q7" value="11"> 11</label>
+            </div>
+
+            <!-- Q8: Text -->
+            <div class="question-card">
+                <h3>8. Who painted the Mona Lisa? <span class="badge badge-text">Text</span></h3>
+                <input type="text" name="q8" placeholder="Type your answer here...">
+            </div>
+
+            <!-- Q9: Select -->
+            <div class="question-card">
+                <h3>9. What is the largest ocean on Earth? <span class="badge badge-select">Dropdown</span></h3>
+                <select name="q9">
+                    <option value="">Select an answer...</option>
+                    <option value="Atlantic Ocean">Atlantic Ocean</option>
+                    <option value="Indian Ocean">Indian Ocean</option>
+                    <option value="Pacific Ocean">Pacific Ocean</option>
+                    <option value="Arctic Ocean">Arctic Ocean</option>
+                </select>
+            </div>
+
+            <!-- Q10: Radio -->
+            <div class="question-card">
+                <h3>10. What is the speed of light approximately? <span class="badge badge-radio">Radio</span></h3>
+                <label><input type="radio" name="q10" value="300,000 km/s"> 300,000 km/s</label>
+                <label><input type="radio" name="q10" value="150,000 km/s"> 150,000 km/s</label>
+                <label><input type="radio" name="q10" value="500,000 km/s"> 500,000 km/s</label>
+                <label><input type="radio" name="q10" value="100,000 km/s"> 100,000 km/s</label>
+            </div>
+
+            <button type="submit" class="submit-btn">Submit Quiz</button>
+        </form>
+    </div>
+
+    <script>
+        document.getElementById('testQuiz').addEventListener('submit', (e) => {
+            e.preventDefault();
+            alert('Quiz submitted! Check your answers.');
+        });
+    </script>
+</body>
+</html>
