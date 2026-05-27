@@ -1092,23 +1092,79 @@
     // ============================================================
 
     function extractVisiblePageText() {
-        // Strategy 1: Main content area (skip nav/footer noise)
-        const mainSelectors = ['main', 'article', '[role="main"]', '.content', '#content', '.quiz', '.assessment', '.exam'];
-        for (const sel of mainSelectors) {
-            const main = document.querySelector(sel);
-            if (main && main.innerText.trim().length > 50) {
-                return cleanPageText(main.innerText);
+        // Strategy 1: Look for question-specific containers
+        const questionSelectors = [
+            // Common quiz containers
+            '.question', '.quiz-question', '.assessment-question',
+            '[data-testid*="question"]', '[class*="question"]',
+            // Visible question text areas
+            '.quiz', '.assessment', '.exam', '.test',
+            // Common LMS containers
+            '#quiz-content', '.quiz-body', '.exam-body',
+            // Generic content containers
+            'main', 'article', '[role="main"]'
+        ];
+
+        for (const sel of questionSelectors) {
+            try {
+                const el = document.querySelector(sel);
+                if (el && el.innerText.trim().length > 50) {
+                    const text = el.innerText.trim();
+                    // Check if it looks like quiz content (has question marks or options)
+                    if (text.includes('?') || /\b(select|choose|which|what)\b/i.test(text)) {
+                        return cleanPageText(text);
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // Strategy 2: Find the largest visible content block that contains question-like text
+        const allBlocks = document.querySelectorAll('div, section, form');
+        let bestBlock = null;
+        let bestScore = 0;
+
+        for (const block of allBlocks) {
+            if (block.closest('.answersync-sidebar')) continue;
+            if (block.closest('nav') || block.closest('header') || block.closest('footer')) continue;
+
+            const text = block.innerText?.trim();
+            if (!text || text.length < 50 || text.length > 10000) continue;
+
+            // Score based on quiz-like content
+            let score = 0;
+            if (text.includes('?')) score += 5;
+            if (/question/i.test(text)) score += 3;
+            if (/\b(select|choose|which|what|how|why)\b/i.test(text)) score += 2;
+            if (/\d+\s*\/\s*\d+/.test(text)) score += 3; // "01/08" pattern
+            // Penalize blocks with too many links (navigation)
+            const links = block.querySelectorAll('a');
+            score -= links.length * 0.5;
+            // Prefer blocks with form elements nearby
+            if (block.querySelector('input, [role="radio"], [role="checkbox"]')) score += 3;
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestBlock = block;
             }
         }
 
-        // Strategy 2: Body minus noise
+        if (bestBlock && bestScore > 3) {
+            return cleanPageText(bestBlock.innerText);
+        }
+
+        // Strategy 3: Body with aggressive noise removal
         const clone = document.body.cloneNode(true);
-        // Remove navigation, footers, scripts, our own UI
-        clone.querySelectorAll('nav, footer, header, script, style, noscript, .answersync-sidebar, .answersync-button-container, [role="navigation"], [role="banner"], [role="contentinfo"]').forEach(e => e.remove());
+        clone.querySelectorAll([
+            'nav', 'footer', 'header', 'script', 'style', 'noscript', 'svg',
+            '.answersync-sidebar', '.answersync-button-container',
+            '[role="navigation"]', '[role="banner"]', '[role="contentinfo"]',
+            'aside', '.sidebar', '.nav', '.menu', '.breadcrumb', '.footer',
+            '[class*="sidebar"]', '[class*="nav"]', '[class*="menu"]', '[class*="footer"]'
+        ].join(', ')).forEach(e => e.remove());
+
         const text = clone.innerText?.trim();
         if (text && text.length > 50) return cleanPageText(text);
 
-        // Strategy 3: Just body
         return cleanPageText(document.body.innerText || '');
     }
 
