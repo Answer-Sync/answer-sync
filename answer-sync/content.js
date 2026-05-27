@@ -44,14 +44,21 @@
         }
 
         if (request.type === 'GET_QUESTION_COUNT') {
-            // Return cached count immediately if available, then rescan
+            // Return cached count if available
             if (lastDetectedQuestions.length > 0) {
                 sendResponse({ count: lastDetectedQuestions.length });
-                // Trigger a background rescan to keep count fresh
                 debouncedRescan();
             } else {
                 smartScan().then(questions => {
-                    sendResponse({ count: questions.length });
+                    if (questions.length > 0) {
+                        sendResponse({ count: questions.length });
+                    } else {
+                        // DOM found nothing — check if page has readable content for AI mode
+                        const pageText = extractVisiblePageText();
+                        const hasContent = pageText && pageText.trim().length > 50;
+                        // Signal that AI text mode is available
+                        sendResponse({ count: 0, aiModeAvailable: hasContent });
+                    }
                 });
             }
             return true; // async

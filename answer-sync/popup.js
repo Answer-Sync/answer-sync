@@ -138,9 +138,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 if (response && typeof response.count === 'number') {
-                    questionCount.textContent = response.count > 0
-                        ? `${response.count} question${response.count !== 1 ? 's' : ''} found`
-                        : 'No questions detected on this page';
+                    if (response.count > 0) {
+                        questionCount.textContent = `${response.count} question${response.count !== 1 ? 's' : ''} found`;
+                    } else if (response.aiModeAvailable) {
+                        questionCount.textContent = '🚀 AI mode ready — click to detect';
+                        questionCount.style.color = '#6c5ce7';
+                    } else {
+                        questionCount.textContent = 'No questions detected on this page';
+                    }
                 } else {
                     questionCount.textContent = 'Scanning...';
                 }
