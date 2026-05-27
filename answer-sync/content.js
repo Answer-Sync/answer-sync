@@ -1104,6 +1104,7 @@
         // Try 2: Universal text extraction (works on ANY site)
         console.log('%c[Answer Sync] DOM detection found 0 questions → using AI text analysis', 'color: #ff9800; font-weight: bold');
         const pageText = extractVisiblePageText();
+        console.log('[Answer Sync] Extracted text length:', pageText?.length, 'Preview:', pageText?.substring(0, 200));
         if (!pageText || pageText.trim().length < 30) {
             return { error: 'No readable content found on this page.' };
         }
@@ -1117,9 +1118,24 @@
             }, resolve);
         });
 
+        console.log('[Answer Sync] API result:', JSON.stringify(result).substring(0, 500));
+
         if (result.error) return { error: result.error };
 
-        const aiQuestions = result.questions || [];
+        let aiQuestions = result.questions || [];
+
+        // Fallback: if parsing failed but AI returned raw text, create a single Q&A
+        if (aiQuestions.length === 0 && result.rawText) {
+            console.log('[Answer Sync] Using rawText fallback:', result.rawText.substring(0, 200));
+            aiQuestions = [{
+                id: 'q_0',
+                question: 'AI Analysis',
+                options: [],
+                answer: result.rawText,
+                confidence: 0.7
+            }];
+        }
+
         if (aiQuestions.length === 0) {
             return { error: 'AI could not identify any questions on this page.' };
         }

@@ -96,7 +96,7 @@ async function handleSolveText(pageText, pageUrl, authToken) {
             });
         }
 
-        return { questions: data.questions || [], creditsRemaining: data.creditsRemaining };
+        return { questions: data.questions || [], rawText: data.rawText, creditsRemaining: data.creditsRemaining };
     } catch (error) {
         return { error: 'Network error. Check your connection.' };
     }
