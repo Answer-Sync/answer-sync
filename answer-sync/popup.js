@@ -139,10 +139,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (response && typeof response.count === 'number') {
                     if (response.count > 0) {
-                        questionCount.textContent = `${response.count} question${response.count !== 1 ? 's' : ''} found`;
-                    } else if (response.aiModeAvailable) {
-                        questionCount.textContent = '🚀 AI mode ready — click to detect';
-                        questionCount.style.color = '#6c5ce7';
+                        const suffix = response.count !== 1 ? 's' : '';
+                        const aiTag = response.aiMode ? ' (AI)' : '';
+                        questionCount.textContent = `${response.count} question${suffix} detected${aiTag}`;
+                        if (response.aiMode) questionCount.style.color = '#6c5ce7';
                     } else {
                         questionCount.textContent = 'No questions detected on this page';
                     }

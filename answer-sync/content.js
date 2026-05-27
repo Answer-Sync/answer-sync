@@ -44,7 +44,6 @@
         }
 
         if (request.type === 'GET_QUESTION_COUNT') {
-            // Return cached count if available
             if (lastDetectedQuestions.length > 0) {
                 sendResponse({ count: lastDetectedQuestions.length });
                 debouncedRescan();
@@ -53,15 +52,13 @@
                     if (questions.length > 0) {
                         sendResponse({ count: questions.length });
                     } else {
-                        // DOM found nothing — check if page has readable content for AI mode
-                        const pageText = extractVisiblePageText();
-                        const hasContent = pageText && pageText.trim().length > 50;
-                        // Signal that AI text mode is available
-                        sendResponse({ count: 0, aiModeAvailable: hasContent });
+                        // DOM found nothing — count questions from visible text
+                        const textCount = countQuestionsFromText();
+                        sendResponse({ count: textCount, aiMode: textCount > 0 });
                     }
                 });
             }
-            return true; // async
+            return true;
         }
 
         if (request.type === 'SCAN_AND_REVIEW') {
@@ -1036,6 +1033,46 @@
             .replace(/[ \t]{2,}/g, ' ')          // Collapse spaces
             .replace(/^\s+$/gm, '')              // Remove blank lines
             .substring(0, 8000);                  // Cap at 8000 chars
+    }
+
+    // Count questions from visible text using heuristics (no API call)
+    function countQuestionsFromText() {
+        const text = extractVisiblePageText();
+        if (!text || text.length < 30) return 0;
+
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+        let count = 0;
+        const seen = new Set();
+
+        for (const line of lines) {
+            // Skip duplicates
+            const key = line.substring(0, 60);
+            if (seen.has(key)) continue;
+
+            // Match question-like patterns
+            if (
+                /\?/.test(line) ||                           // Has question mark
+                /^\d+[\.\)\:]/.test(line) ||                 // "1. ..." or "1) ..."
+                /^(Question|Q)\s*\d/i.test(line) ||          // "Question 1" or "Q1"
+                /^(what|which|who|where|when|why|how|select|choose|identify|name|describe|explain|true or false)/i.test(line)
+            ) {
+                // Must be long enough to be a real question
+                if (line.length > 15) {
+                    count++;
+                    seen.add(key);
+                }
+            }
+        }
+
+        // Also check for "Question X/Y" pattern (e.g., "Question 01/08")
+        const qMatch = text.match(/Question\s+(\d+)\s*\/\s*(\d+)/i);
+        if (qMatch && count === 0) {
+            // Single question at a time (paginated quiz)
+            count = 1;
+        }
+
+        console.log(`%c[Answer Sync] Text analysis found ${count} question(s)`, 'color: #ff9800; font-weight: bold');
+        return count;
     }
 
     // ============================================================
