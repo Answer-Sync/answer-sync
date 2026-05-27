@@ -1092,80 +1092,18 @@
     // ============================================================
 
     function extractVisiblePageText() {
-        // Strategy 1: Look for question-specific containers
-        const questionSelectors = [
-            // Common quiz containers
-            '.question', '.quiz-question', '.assessment-question',
-            '[data-testid*="question"]', '[class*="question"]',
-            // Visible question text areas
-            '.quiz', '.assessment', '.exam', '.test',
-            // Common LMS containers
-            '#quiz-content', '.quiz-body', '.exam-body',
-            // Generic content containers
-            'main', 'article', '[role="main"]'
-        ];
+        // Remove our own UI first
+        const ourUI = document.querySelectorAll('.answersync-sidebar, .answersync-button-container');
+        ourUI.forEach(el => el.style.display = 'none');
 
-        for (const sel of questionSelectors) {
-            try {
-                const el = document.querySelector(sel);
-                if (el && el.innerText.trim().length > 50) {
-                    const text = el.innerText.trim();
-                    // Check if it looks like quiz content (has question marks or options)
-                    if (text.includes('?') || /\b(select|choose|which|what)\b/i.test(text)) {
-                        return cleanPageText(text);
-                    }
-                }
-            } catch (e) {}
-        }
+        // Grab ALL visible text — let the AI filter out noise
+        const text = document.body.innerText || '';
 
-        // Strategy 2: Find the largest visible content block that contains question-like text
-        const allBlocks = document.querySelectorAll('div, section, form');
-        let bestBlock = null;
-        let bestScore = 0;
+        // Restore our UI
+        ourUI.forEach(el => el.style.display = '');
 
-        for (const block of allBlocks) {
-            if (block.closest('.answersync-sidebar')) continue;
-            if (block.closest('nav') || block.closest('header') || block.closest('footer')) continue;
-
-            const text = block.innerText?.trim();
-            if (!text || text.length < 50 || text.length > 10000) continue;
-
-            // Score based on quiz-like content
-            let score = 0;
-            if (text.includes('?')) score += 5;
-            if (/question/i.test(text)) score += 3;
-            if (/\b(select|choose|which|what|how|why)\b/i.test(text)) score += 2;
-            if (/\d+\s*\/\s*\d+/.test(text)) score += 3; // "01/08" pattern
-            // Penalize blocks with too many links (navigation)
-            const links = block.querySelectorAll('a');
-            score -= links.length * 0.5;
-            // Prefer blocks with form elements nearby
-            if (block.querySelector('input, [role="radio"], [role="checkbox"]')) score += 3;
-
-            if (score > bestScore) {
-                bestScore = score;
-                bestBlock = block;
-            }
-        }
-
-        if (bestBlock && bestScore > 3) {
-            return cleanPageText(bestBlock.innerText);
-        }
-
-        // Strategy 3: Body with aggressive noise removal
-        const clone = document.body.cloneNode(true);
-        clone.querySelectorAll([
-            'nav', 'footer', 'header', 'script', 'style', 'noscript', 'svg',
-            '.answersync-sidebar', '.answersync-button-container',
-            '[role="navigation"]', '[role="banner"]', '[role="contentinfo"]',
-            'aside', '.sidebar', '.nav', '.menu', '.breadcrumb', '.footer',
-            '[class*="sidebar"]', '[class*="nav"]', '[class*="menu"]', '[class*="footer"]'
-        ].join(', ')).forEach(e => e.remove());
-
-        const text = clone.innerText?.trim();
-        if (text && text.length > 50) return cleanPageText(text);
-
-        return cleanPageText(document.body.innerText || '');
+        console.log(`[Answer Sync] Extracted ${text.length} chars of text`);
+        return cleanPageText(text);
     }
 
     function cleanPageText(text) {
