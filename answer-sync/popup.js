@@ -21,7 +21,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Action elements
     const reviewBtn = document.getElementById('reviewBtn');
-    const autoFillBtn = document.getElementById('autoFillBtn');
     const dashboardBtn = document.getElementById('dashboardBtn');
     const questionCount = document.getElementById('questionCount');
 
@@ -226,44 +225,74 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Auto-Fill Mode
-    autoFillBtn.addEventListener('click', () => {
-        chrome.storage.local.get(['authToken'], (result) => {
-            if (!result.authToken) {
-                showStatus('Please sign in first', 'error');
-                return;
+    // Auto-Fill Toggle
+    const autoFillCheckbox = document.getElementById('autoFillCheckbox');
+    const autoFillStatus = document.getElementById('autoFillStatus');
+    const autoFillToggle = document.getElementById('autoFillToggle');
+
+    // Restore toggle state
+    chrome.storage.local.get(['autoFillActive'], (result) => {
+        const isActive = result.autoFillActive || false;
+        autoFillCheckbox.checked = isActive;
+        updateToggleUI(isActive);
+    });
+
+    function updateToggleUI(isActive) {
+        if (isActive) {
+            autoFillStatus.textContent = 'Active — auto-filling answers';
+            autoFillStatus.style.color = '#4caf50';
+            autoFillToggle.classList.add('active');
+        } else {
+            autoFillStatus.textContent = 'Off — tap to activate';
+            autoFillStatus.style.color = '';
+            autoFillToggle.classList.remove('active');
+        }
+    }
+
+    autoFillCheckbox.addEventListener('change', () => {
+        const isActive = autoFillCheckbox.checked;
+        chrome.storage.local.set({ autoFillActive: isActive });
+        updateToggleUI(isActive);
+
+        // Send toggle to ALL tabs with content script
+        chrome.tabs.query({}, (tabs) => {
+            for (const tab of tabs) {
+                chrome.tabs.sendMessage(tab.id, {
+                    type: 'TOGGLE_AUTOFILL',
+                    active: isActive
+                }).catch(() => {});
             }
+        });
 
-            showProcessingView('Auto-filling all answers...');
-
-            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-                if (!tabs || !tabs[0]) {
-                    showStatus('No active tab found', 'error');
-                    checkAuthState();
+        if (isActive) {
+            // Also get auth token and send it
+            chrome.storage.local.get(['authToken'], (result) => {
+                if (!result.authToken) {
+                    autoFillCheckbox.checked = false;
+                    chrome.storage.local.set({ autoFillActive: false });
+                    updateToggleUI(false);
+                    showStatus('Please sign in first', 'error');
                     return;
                 }
-
-                chrome.tabs.sendMessage(tabs[0].id, {
-                    type: 'SCAN_AND_AUTOFILL',
-                    authToken: result.authToken
-                }, (response) => {
-                    if (chrome.runtime.lastError) {
-                        showStatus('Could not connect to page. Try refreshing.', 'error');
-                        checkAuthState();
-                        return;
-                    }
-                    if (response && response.error) {
-                        showStatus(response.error, 'error');
-                        checkAuthState();
-                    } else if (response && response.filled !== undefined) {
-                        showStatus(`✅ Filled ${response.filled} answer(s)!`, 'success');
-                        setTimeout(() => checkAuthState(), 2000);
-                    } else {
-                        window.close();
+                chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                    if (tabs[0]) {
+                        chrome.tabs.sendMessage(tabs[0].id, {
+                            type: 'TOGGLE_AUTOFILL',
+                            active: true,
+                            authToken: result.authToken
+                        }).catch(() => {});
                     }
                 });
             });
-        });
+        }
+    });
+
+    // Click anywhere on the row to toggle
+    autoFillToggle.addEventListener('click', (e) => {
+        if (e.target !== autoFillCheckbox && !e.target.classList.contains('toggle-slider')) {
+            autoFillCheckbox.checked = !autoFillCheckbox.checked;
+            autoFillCheckbox.dispatchEvent(new Event('change'));
+        }
     });
 
     // Cancel processing

@@ -74,7 +74,81 @@
                 .catch(err => sendResponse({ error: err.message }));
             return true; // async
         }
+
+        if (request.type === 'TOGGLE_AUTOFILL') {
+            autoFillActive = request.active;
+            if (request.authToken) {
+                autoFillAuthToken = request.authToken;
+                // Also store for persistence across page loads
+                chrome.storage.local.set({ autoFillAuthToken: request.authToken });
+            }
+            console.log(`%c[Answer Sync] Auto-fill ${autoFillActive ? 'ACTIVATED' : 'DEACTIVATED'}`, 'color: #4caf50; font-weight: bold; font-size: 14px');
+            if (autoFillActive) {
+                runAutoFillCycle();
+            }
+            sendResponse({ ok: true });
+            return false;
+        }
     });
+
+    // ============================================================
+    // PERSISTENT AUTO-FILL ENGINE
+    // Runs asynchronously in the background when toggle is ON
+    // ============================================================
+
+    let autoFillActive = false;
+    let autoFillAuthToken = null;
+    let autoFillRunning = false;
+    let lastAutoFilledText = ''; // Track what we already filled to avoid repeats
+
+    // Restore auto-fill state on page load
+    chrome.storage.local.get(['autoFillActive', 'autoFillAuthToken', 'authToken'], (result) => {
+        if (result.autoFillActive) {
+            autoFillActive = true;
+            autoFillAuthToken = result.autoFillAuthToken || result.authToken;
+            console.log('%c[Answer Sync] Auto-fill restored from storage — ACTIVE', 'color: #4caf50; font-weight: bold');
+            // Wait for page to load, then start
+            setTimeout(() => runAutoFillCycle(), 2000);
+        }
+    });
+
+    async function runAutoFillCycle() {
+        if (!autoFillActive || autoFillRunning) return;
+        if (!autoFillAuthToken) {
+            // Try to get token from storage
+            const result = await new Promise(resolve => chrome.storage.local.get(['authToken'], resolve));
+            autoFillAuthToken = result.authToken;
+            if (!autoFillAuthToken) return;
+        }
+
+        autoFillRunning = true;
+
+        try {
+            // Extract current page text to check if question changed
+            const currentText = extractVisiblePageText();
+            const textSignature = currentText?.substring(0, 200) || '';
+
+            if (textSignature === lastAutoFilledText) {
+                // Same question — skip
+                autoFillRunning = false;
+                return;
+            }
+
+            console.log('%c[Answer Sync] Auto-fill: solving current question...', 'color: #4caf50');
+            const fillResult = await handleScanAndAutoFill(autoFillAuthToken);
+
+            if (fillResult.filled && fillResult.filled > 0) {
+                lastAutoFilledText = textSignature; // Mark as filled
+                console.log(`%c[Answer Sync] Auto-filled ${fillResult.filled} answer(s)! ✅`, 'color: #4caf50; font-weight: bold; font-size: 14px');
+            } else if (fillResult.error) {
+                console.log(`[Answer Sync] Auto-fill skipped: ${fillResult.error}`);
+            }
+        } catch (e) {
+            console.error('[Answer Sync] Auto-fill error:', e);
+        }
+
+        autoFillRunning = false;
+    }
 
     // ============================================================
     // DYNAMIC CONTENT MONITORING
@@ -108,6 +182,11 @@
                         count: newCount
                     }).catch(() => {});
                 } catch (e) {}
+
+                // Trigger auto-fill if active
+                if (autoFillActive && newCount > 0) {
+                    runAutoFillCycle();
+                }
             }
         }, 500); // Wait 500ms after last DOM change
     }
@@ -184,9 +263,16 @@
             lastUrl = newUrl;
             lastQuestionCount = 0;
             lastDetectedQuestions = [];
+            lastAutoFilledText = ''; // Reset so auto-fill runs on new page
 
             // Wait for new content to load, then scan
-            setTimeout(() => debouncedRescan(), 800);
+            setTimeout(() => {
+                debouncedRescan();
+                // Auto-fill if active
+                if (autoFillActive) {
+                    setTimeout(() => runAutoFillCycle(), 1000);
+                }
+            }, 800);
         }
     }
 

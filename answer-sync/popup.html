@@ -64,13 +64,17 @@
                     </div>
                 </button>
 
-                <button id="autoFillBtn" class="btn-action btn-autofill">
+                <div id="autoFillToggle" class="btn-action btn-autofill toggle-row">
                     <span class="btn-icon">⚡</span>
                     <div class="btn-text-group">
-                        <span class="btn-label">Auto-Fill All</span>
-                        <span class="btn-desc">Fill everything now</span>
+                        <span class="btn-label">Auto-Fill</span>
+                        <span class="btn-desc" id="autoFillStatus">Off — tap to activate</span>
                     </div>
-                </button>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="autoFillCheckbox">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
             </div>
 
             <!-- Question Count -->
